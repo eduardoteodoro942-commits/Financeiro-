@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#111111">
+<title>Meu Controle Financeiro</title>
+<link rel="manifest" href="manifest.json">
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f4f4;color:#171717}
+header{background:#111;color:#fff;padding:22px 18px;border-radius:0 0 22px 22px}
+h1{margin:0 0 6px;font-size:25px}.sub{opacity:.75;font-size:14px}
+.container{padding:16px;max-width:650px;margin:auto}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
+.card{background:#fff;border-radius:16px;padding:15px;box-shadow:0 2px 8px #00000012}
+.card strong{display:block;font-size:20px;margin-top:6px}.green{color:#16803c}.red{color:#c62828}
+button{border:0;border-radius:12px;padding:12px 14px;font-weight:bold;cursor:pointer}
+.primary{background:#111;color:#fff;width:100%;font-size:16px}
+.filters{display:flex;gap:8px;margin:14px 0}.filters button{flex:1;background:#ddd}.filters .active{background:#111;color:#fff}
+.debt{background:#fff;border-radius:16px;padding:15px;margin:10px 0;box-shadow:0 2px 8px #00000012}
+.row{display:flex;justify-content:space-between;gap:10px}.name{font-weight:bold;font-size:17px}
+.status{font-size:12px;font-weight:bold;padding:5px 8px;border-radius:20px;background:#eee}
+.status.paid{background:#dff5e7;color:#16803c}.status.open{background:#ffe2e2;color:#c62828}
+.small{font-size:13px;color:#666;margin-top:6px}.actions{display:flex;gap:7px;margin-top:12px}.actions button{flex:1;background:#eee}.actions .pay{background:#16803c;color:#fff}
+.empty{text-align:center;color:#777;padding:35px 10px}
+dialog{border:0;border-radius:18px;padding:0;width:calc(100% - 30px);max-width:500px;box-shadow:0 10px 40px #0006}
+form{padding:20px}label{display:block;font-weight:bold;font-size:14px;margin:12px 0 5px}input,select{width:100%;padding:13px;border:1px solid #ccc;border-radius:10px;font-size:16px}
+.form-actions{display:flex;gap:10px;margin-top:18px}.form-actions button{flex:1}.cancel{background:#ddd}
+footer{text-align:center;color:#888;font-size:12px;padding:25px}
+</style>
+</head>
+<body>
+<header><div class="container"><h1>💰 Meu Controle Financeiro</h1><div class="sub">Organize suas dívidas e saiba o que já foi pago.</div></div></header>
+<main class="container">
+<div class="cards">
+<div class="card">Em aberto<strong class="red" id="openTotal">R$ 0,00</strong></div>
+<div class="card">Já pago<strong class="green" id="paidTotal">R$ 0,00</strong></div>
+<div class="card">Total<strong id="allTotal">R$ 0,00</strong></div>
+<div class="card">Pendentes<strong id="countOpen">0</strong></div>
+</div>
+<button class="primary" onclick="openForm()">＋ Adicionar dívida</button>
+<div class="filters">
+<button class="active" onclick="filter('all',this)">Todas</button>
+<button onclick="filter('open',this)">Pendentes</button>
+<button onclick="filter('paid',this)">Pagas</button>
+</div>
+<section id="list"></section>
+<footer>Seus dados ficam salvos neste navegador.</footer>
+</main>
+
+<dialog id="dlg">
+<form method="dialog" onsubmit="saveDebt(event)">
+<h2 id="formTitle">Adicionar dívida</h2>
+<input type="hidden" id="editId">
+<label>Nome da dívida</label><input id="name" required placeholder="Ex.: Nubank">
+<label>Valor (R$)</label><input id="value" required type="number" step="0.01" min="0" placeholder="0,00">
+<label>Data de vencimento</label><input id="due" required type="date">
+<label>Categoria</label>
+<select id="cat"><option>Cartão</option><option>Casa</option><option>Carro</option><option>Empréstimo</option><option>Contas</option><option>Outros</option></select>
+<div class="form-actions"><button type="button" class="cancel" onclick="dlg.close()">Cancelar</button><button class="primary" style="width:auto">Salvar</button></div>
+</form>
+</dialog>
+
+<script>
+const KEY='meuControleFinanceiroV1';
+let debts=JSON.parse(localStorage.getItem(KEY)||'[]'), current='all';
+const brl=n=>n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+function persist(){localStorage.setItem(KEY,JSON.stringify(debts));render()}
+function openForm(id=null){
+ formTitle.textContent=id?'Editar dívida':'Adicionar dívida'; editId.value=id||'';
+ const d=debts.find(x=>x.id==id);
+ name.value=d?.name||''; value.value=d?.value??''; due.value=d?.due||new Date().toISOString().slice(0,10); cat.value=d?.cat||'Cartão'; dlg.showModal();
+}
+function saveDebt(e){e.preventDefault();
+ const id=editId.value; const obj={id:id||Date.now().toString(),name:name.value.trim(),value:parseFloat(value.value)||0,due:due.value,cat:cat.value,paid:id?(debts.find(x=>x.id==id)?.paid||false):false};
+ if(id) debts=debts.map(x=>x.id==id?obj:x); else debts.push(obj); persist(); dlg.close();
+}
+function toggle(id){debts=debts.map(x=>x.id==id?{...x,paid:!x.paid}:x);persist()}
+function del(id){if(confirm('Excluir esta dívida?')){debts=debts.filter(x=>x.id!=id);persist()}}
+function filter(f,el){current=f;document.querySelectorAll('.filters button').forEach(b=>b.classList.remove('active'));el.classList.add('active');render()}
+function render(){
+ const open=debts.filter(x=>!x.paid).reduce((s,x)=>s+x.value,0), paid=debts.filter(x=>x.paid).reduce((s,x)=>s+x.value,0);
+ openTotal.textContent=brl(open);paidTotal.textContent=brl(paid);allTotal.textContent=brl(open+paid);countOpen.textContent=debts.filter(x=>!x.paid).length;
+ let arr=debts.filter(x=>current==='all'||(current==='paid'?x.paid:!x.paid)).sort((a,b)=>a.due.localeCompare(b.due));
+ list.innerHTML=arr.length?arr.map(d=>`<article class="debt"><div class="row"><div><div class="name">${esc(d.name)}</div><div class="small">${esc(d.cat)} • Vence em ${fmt(d.due)}</div></div><span class="status ${d.paid?'paid':'open'}">${d.paid?'PAGO':'PENDENTE'}</span></div><div style="font-size:21px;font-weight:bold;margin-top:10px">${brl(d.value)}</div><div class="actions"><button onclick="openForm('${d.id}')">✏️ Editar</button><button onclick="toggle('${d.id}')" class="pay">${d.paid?'↩️ Desmarcar':'✓ Marcar como pago'}</button><button onclick="del('${d.id}')">🗑️</button></div></article>`).join(''):'<div class="empty">Nenhuma dívida aqui.<br>Toque em “Adicionar dívida” para começar.</div>';
+}
+function fmt(s){if(!s)return'';const [y,m,d]=s.split('-');return `${d}/${m}/${y}`}
+function esc(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+render();
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{})}
+</script>
+</body></html>
